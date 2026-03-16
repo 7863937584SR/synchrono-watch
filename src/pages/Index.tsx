@@ -2,19 +2,42 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Play, Users, Zap, ArrowRight } from "lucide-react";
+import { createRoom, findRoom } from "@/lib/room";
+import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [roomCode, setRoomCode] = useState("");
   const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleCreate = () => {
-    navigate("/room");
+  const handleCreate = async () => {
+    if (!name.trim()) {
+      toast({ title: "Enter your name first", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    try {
+      const room = await createRoom(name.trim());
+      navigate(`/room/${room.code}`, { state: { userName: name.trim(), isHost: true } });
+    } catch {
+      toast({ title: "Failed to create room", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleJoin = () => {
-    if (roomCode.trim()) {
-      navigate("/room");
+  const handleJoin = async () => {
+    if (!name.trim() || !roomCode.trim()) return;
+    setLoading(true);
+    try {
+      const room = await findRoom(roomCode.trim());
+      navigate(`/room/${room.code}`, { state: { userName: name.trim(), isHost: false } });
+    } catch {
+      toast({ title: "Room not found", variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -26,7 +49,6 @@ const Index = () => {
         transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
         className="w-full max-w-md space-y-10"
       >
-        {/* Logo */}
         <div className="text-center space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-4">
             <Zap className="w-3.5 h-3.5 text-primary" />
@@ -36,7 +58,6 @@ const Index = () => {
           <p className="text-sm text-muted-foreground">Watch in perfect lockstep.</p>
         </div>
 
-        {/* Create Room */}
         <div className="space-y-3">
           <label className="text-[10px] uppercase tracking-widest text-muted-foreground">Your name</label>
           <input
@@ -48,21 +69,20 @@ const Index = () => {
           />
           <button
             onClick={handleCreate}
-            className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors duration-150 glow-primary"
+            disabled={loading}
+            className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors duration-150 glow-primary disabled:opacity-50"
           >
             <Play className="w-4 h-4" />
-            Create Room
+            {loading ? "Creating..." : "Create Room"}
           </button>
         </div>
 
-        {/* Divider */}
         <div className="flex items-center gap-4">
           <div className="flex-1 h-px bg-foreground/10" />
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground">or join</span>
           <div className="flex-1 h-px bg-foreground/10" />
         </div>
 
-        {/* Join Room */}
         <div className="space-y-3">
           <label className="text-[10px] uppercase tracking-widest text-muted-foreground">Room code</label>
           <div className="flex gap-2">
@@ -76,16 +96,14 @@ const Index = () => {
             />
             <button
               onClick={handleJoin}
-              disabled={!roomCode.trim()}
+              disabled={!roomCode.trim() || !name.trim() || loading}
               className="h-11 px-5 bg-secondary hover:bg-secondary/80 text-foreground rounded-lg text-sm font-medium flex items-center gap-2 transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Join
-              <ArrowRight className="w-4 h-4" />
+              Join <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Status bar */}
         <div className="flex items-center justify-center gap-4 pt-4">
           <div className="flex items-center gap-1.5">
             <div className="w-1.5 h-1.5 rounded-full bg-success glow-sync" />
@@ -93,7 +111,7 @@ const Index = () => {
           </div>
           <div className="flex items-center gap-1.5">
             <Users className="w-3 h-3 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">12 active rooms</span>
+            <span className="text-[10px] text-muted-foreground">Real-time sync</span>
           </div>
         </div>
       </motion.div>
