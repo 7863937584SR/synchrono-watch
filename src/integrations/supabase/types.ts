@@ -14,7 +14,59 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      messages: {
+        Row: {
+          created_at: string
+          id: string
+          room_id: string
+          text: string
+          user_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          room_id: string
+          text: string
+          user_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          room_id?: string
+          text?: string
+          user_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rooms: {
+        Row: {
+          code: string
+          created_at: string
+          host_name: string
+          id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          host_name: string
+          id?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          host_name?: string
+          id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
