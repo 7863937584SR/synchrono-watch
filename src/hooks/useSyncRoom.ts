@@ -2,11 +2,19 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
-export interface SyncState {
+// ── Event types ────────────────────────────────────────────────────────────────
+export type SyncEventType = "play" | "pause" | "seek" | "tick";
+
+export interface SyncEvent {
+  type: SyncEventType;
   currentTime: number;
   isPlaying: boolean;
-  timestamp: number; // Date.now() when event was sent
+  /** Wall-clock ms when the host sent this packet – used for latency compensation */
+  sentAt: number;
 }
+
+// Backwards-compatible alias used by VideoPlayer
+export type SyncState = SyncEvent;
 
 export interface PeerPresence {
   name: string;
@@ -32,7 +40,7 @@ export function useSyncRoom({ roomCode, userName, isHost }: UseSyncRoomOptions) 
       config: { presence: { key: userName } },
     });
 
-    // Track presence
+    // ── Presence (peer list) ──────────────────────────────────────────────────
     channel.on("presence", { event: "sync" }, () => {
       const state = channel.presenceState<PeerPresence>();
       const peerMap: Record<string, PeerPresence> = {};
@@ -44,10 +52,16 @@ export function useSyncRoom({ roomCode, userName, isHost }: UseSyncRoomOptions) 
       setPeers(peerMap);
     });
 
-    // Listen for sync commands from host
+    // ── Sync events from host ─────────────────────────────────────────────────
     channel.on("broadcast", { event: "sync" }, ({ payload }) => {
       if (!isHost) {
-        setSyncState(payload as SyncState);
+        const ev = payload as SyncEvent;
+        // NTP-style compensation: advance currentTime by half the round-trip
+        // (we only have one-way time here, so use full elapsed as an upper bound
+        //  and halve it for a reasonable estimate).
+        const networkDelayMs = Math.max(0, Date.now() - ev.sentAt);
+        const compensatedTime = ev.currentTime + networkDelayMs / 1000;
+        setSyncState({ ...ev, currentTime: compensatedTime });
       }
     });
 
@@ -70,21 +84,32 @@ export function useSyncRoom({ roomCode, userName, isHost }: UseSyncRoomOptions) 
     };
   }, [roomCode, userName, isHost]);
 
-  const broadcastSync = useCallback((state: SyncState) => {
-    channelRef.current?.send({
-      type: "broadcast",
-      event: "sync",
-      payload: state,
-    });
-  }, []);
+  /**
+   * Broadcast a sync event to all viewers immediately.
+   * `type` controls how strict the receiver's correction will be.
+   */
+  const broadcastSync = useCallback(
+    (type: SyncEventType, currentTime: number, isPlaying: boolean) => {
+      const ev: SyncEvent = { type, currentTime, isPlaying, sentAt: Date.now() };
+      channelRef.current?.send({
+        type: "broadcast",
+        event: "sync",
+        payload: ev,
+      });
+    },
+    []
+  );
 
-  const updatePresence = useCallback((data: Partial<PeerPresence>) => {
-    channelRef.current?.track({
-      name: userName,
-      ...data,
-      lastSeen: Date.now(),
-    });
-  }, [userName]);
+  const updatePresence = useCallback(
+    (data: Partial<PeerPresence>) => {
+      channelRef.current?.track({
+        name: userName,
+        ...data,
+        lastSeen: Date.now(),
+      });
+    },
+    [userName]
+  );
 
   return { peers, syncState, broadcastSync, updatePresence };
 }

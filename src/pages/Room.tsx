@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import VideoPlayer from "@/components/VideoPlayer";
 import PeerList from "@/components/PeerList";
@@ -9,6 +9,9 @@ import { findRoom } from "@/lib/room";
 import type { Peer } from "@/components/PeerList";
 import { motion } from "framer-motion";
 
+/** Minimum ms between periodic tick broadcasts (keeps channel quiet) */
+const TICK_INTERVAL_MS = 1000;
+
 const Room = () => {
   const { code } = useParams<{ code: string }>();
   const location = useLocation();
@@ -16,6 +19,7 @@ const Room = () => {
   const { userName, isHost } = (location.state as { userName: string; isHost: boolean }) || {};
   const [roomId, setRoomId] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const lastTickRef = useRef<number>(0);
 
   useEffect(() => {
     if (!userName || !code) {
@@ -55,12 +59,32 @@ const Room = () => {
   const readyCount = peerList.filter((p) => p.isReady).length;
   const allReady = peerList.length > 0 && readyCount === peerList.length;
 
-  const handleTimeUpdate = (time: number) => {
+  // ── Host event handlers ────────────────────────────────────────────────────
+  const handlePlay = useCallback((time: number) => {
+    broadcastSync("play", time, true);
+    updatePresence({ isPlaying: true, currentTime: time });
+  }, [broadcastSync, updatePresence]);
+
+  const handlePause = useCallback((time: number) => {
+    broadcastSync("pause", time, false);
+    updatePresence({ isPlaying: false, currentTime: time });
+  }, [broadcastSync, updatePresence]);
+
+  const handleSeek = useCallback((time: number) => {
+    broadcastSync("seek", time, false);
     updatePresence({ currentTime: time });
-    if (isHost) {
-      broadcastSync({ currentTime: time, isPlaying: true, timestamp: Date.now() });
+  }, [broadcastSync, updatePresence]);
+
+  /** Throttled periodic tick – sent at most once per TICK_INTERVAL_MS */
+  const handleTimeUpdate = useCallback((time: number) => {
+    updatePresence({ currentTime: time });
+    if (!isHost) return;
+    const now = Date.now();
+    if (now - lastTickRef.current >= TICK_INTERVAL_MS) {
+      lastTickRef.current = now;
+      broadcastSync("tick", time, true);
     }
-  };
+  }, [isHost, broadcastSync, updatePresence]);
 
   if (!userName || !code) return null;
 
@@ -92,7 +116,11 @@ const Room = () => {
         </div>
 
         <VideoPlayer
+          isHost={isHost}
           onTimeUpdate={handleTimeUpdate}
+          onPlay={handlePlay}
+          onPause={handlePause}
+          onSeek={handleSeek}
           syncState={!isHost ? syncState : null}
         />
 
