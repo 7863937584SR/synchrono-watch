@@ -29,7 +29,7 @@ const Room = () => {
     findRoom(code).then((room) => setRoomId(room.id)).catch(() => navigate("/"));
   }, [code, userName, navigate]);
 
-  const { peers, syncState, broadcastSync, updatePresence } = useSyncRoom({
+  const { peers, syncState, broadcastSync, broadcastSource, updatePresence } = useSyncRoom({
     roomCode: code || "",
     userName: userName || "",
     isHost: isHost || false,
@@ -74,6 +74,11 @@ const Room = () => {
     broadcastSync("seek", time, false);
     updatePresence({ currentTime: time });
   }, [broadcastSync, updatePresence]);
+
+  const handleSourceChange = useCallback((src: string | null) => {
+    if (!isHost) return;
+    broadcastSource(src || "");
+  }, [isHost, broadcastSource]);
 
   /** Throttled periodic tick – sent at most once per TICK_INTERVAL_MS */
   const handleTimeUpdate = useCallback((time: number) => {
@@ -121,6 +126,7 @@ const Room = () => {
           onPlay={handlePlay}
           onPause={handlePause}
           onSeek={handleSeek}
+          onSourceChange={handleSourceChange}
           syncState={!isHost ? syncState : null}
         />
 

@@ -11,6 +11,8 @@ interface VideoPlayerProps {
   onPause?: (time: number) => void;
   /** Called immediately when the host seeks */
   onSeek?: (time: number) => void;
+  /** Called when the host sets or clears a direct URL source */
+  onSourceChange?: (src: string | null) => void;
   syncState?: SyncState | null;
   isHost?: boolean;
 }
@@ -20,6 +22,7 @@ const VideoPlayer = ({
   onPlay,
   onPause,
   onSeek,
+  onSourceChange,
   syncState,
   isHost,
 }: VideoPlayerProps) => {
@@ -56,6 +59,20 @@ const VideoPlayer = ({
 
     if (suppressNextSync.current) {
       suppressNextSync.current = false;
+      return;
+    }
+
+    if (syncState.type === "source") {
+      const nextSrc = syncState.sourceUrl || "";
+      setVideoSrc(nextSrc);
+      setCurrentTime(0);
+      setDuration(0);
+      setIsPlaying(false);
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0;
+        videoRef.current.pause();
+        videoRef.current.load();
+      }
       return;
     }
 
@@ -191,7 +208,9 @@ const VideoPlayer = ({
   // ── Video source handlers ───────────────────────────────────────────────────
   const applyUrl = () => {
     if (!urlInput.trim()) return;
-    setVideoSrc(urlInput.trim());
+    const nextUrl = urlInput.trim();
+    setVideoSrc(nextUrl);
+    onSourceChange?.(nextUrl);
     setUrlInput("");
     setShowUrlInput(false);
   };
@@ -211,6 +230,7 @@ const VideoPlayer = ({
     setDuration(0);
     setCurrentTime(0);
     setIsPlaying(false);
+    onSourceChange?.(null);
   };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -389,6 +409,13 @@ const VideoPlayer = ({
           <span className={`font-mono-data text-[10px] ${driftMs < 30 ? "text-success" : driftMs < 200 ? "text-warning" : "text-muted-foreground"}`}>
             {driftMs}ms drift
           </span>
+        </div>
+      )}
+
+      {/* ── Local file note (host only) ────────────────────────────────── */}
+      {isHost && videoSrc.startsWith("blob:") && (
+        <div className="absolute top-4 left-4 px-2 py-1 rounded-md bg-background/70 backdrop-blur-sm border border-foreground/10">
+          <span className="text-[10px] text-muted-foreground">Local files do not sync. Use Paste URL.</span>
         </div>
       )}
 

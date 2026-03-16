@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 // ── Event types ────────────────────────────────────────────────────────────────
-export type SyncEventType = "play" | "pause" | "seek" | "tick";
+export type SyncEventType = "play" | "pause" | "seek" | "tick" | "source";
 
 export interface SyncEvent {
   type: SyncEventType;
@@ -11,6 +11,8 @@ export interface SyncEvent {
   isPlaying: boolean;
   /** Wall-clock ms when the host sent this packet – used for latency compensation */
   sentAt: number;
+  /** Optional video source URL for direct playback */
+  sourceUrl?: string;
 }
 
 // Backwards-compatible alias used by VideoPlayer
@@ -89,8 +91,8 @@ export function useSyncRoom({ roomCode, userName, isHost }: UseSyncRoomOptions) 
    * `type` controls how strict the receiver's correction will be.
    */
   const broadcastSync = useCallback(
-    (type: SyncEventType, currentTime: number, isPlaying: boolean) => {
-      const ev: SyncEvent = { type, currentTime, isPlaying, sentAt: Date.now() };
+    (type: SyncEventType, currentTime: number, isPlaying: boolean, sourceUrl?: string) => {
+      const ev: SyncEvent = { type, currentTime, isPlaying, sentAt: Date.now(), sourceUrl };
       channelRef.current?.send({
         type: "broadcast",
         event: "sync",
@@ -98,6 +100,13 @@ export function useSyncRoom({ roomCode, userName, isHost }: UseSyncRoomOptions) 
       });
     },
     []
+  );
+
+  const broadcastSource = useCallback(
+    (sourceUrl: string) => {
+      broadcastSync("source", 0, false, sourceUrl);
+    },
+    [broadcastSync]
   );
 
   const updatePresence = useCallback(
@@ -111,5 +120,5 @@ export function useSyncRoom({ roomCode, userName, isHost }: UseSyncRoomOptions) 
     [userName]
   );
 
-  return { peers, syncState, broadcastSync, updatePresence };
+  return { peers, syncState, broadcastSync, broadcastSource, updatePresence };
 }
