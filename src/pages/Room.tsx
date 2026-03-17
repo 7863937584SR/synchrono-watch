@@ -19,6 +19,7 @@ const Room = () => {
   const { userName, isHost } = (location.state as { userName: string; isHost: boolean }) || {};
   const [roomId, setRoomId] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [sourceUrl, setSourceUrl] = useState<string>("");
   const lastTickRef = useRef<number>(0);
 
   useEffect(() => {
@@ -61,23 +62,25 @@ const Room = () => {
 
   // ── Host event handlers ────────────────────────────────────────────────────
   const handlePlay = useCallback((time: number) => {
-    broadcastSync("play", time, true);
+    broadcastSync("play", time, true, sourceUrl);
     updatePresence({ isPlaying: true, currentTime: time });
-  }, [broadcastSync, updatePresence]);
+  }, [broadcastSync, updatePresence, sourceUrl]);
 
   const handlePause = useCallback((time: number) => {
-    broadcastSync("pause", time, false);
+    broadcastSync("pause", time, false, sourceUrl);
     updatePresence({ isPlaying: false, currentTime: time });
-  }, [broadcastSync, updatePresence]);
+  }, [broadcastSync, updatePresence, sourceUrl]);
 
   const handleSeek = useCallback((time: number) => {
-    broadcastSync("seek", time, false);
+    broadcastSync("seek", time, false, sourceUrl);
     updatePresence({ currentTime: time });
-  }, [broadcastSync, updatePresence]);
+  }, [broadcastSync, updatePresence, sourceUrl]);
 
   const handleSourceChange = useCallback((src: string | null) => {
     if (!isHost) return;
-    broadcastSource(src || "");
+    const nextSource = src || "";
+    setSourceUrl(nextSource);
+    broadcastSource(nextSource);
   }, [isHost, broadcastSource]);
 
   /** Throttled periodic tick – sent at most once per TICK_INTERVAL_MS */
@@ -87,9 +90,9 @@ const Room = () => {
     const now = Date.now();
     if (now - lastTickRef.current >= TICK_INTERVAL_MS) {
       lastTickRef.current = now;
-      broadcastSync("tick", time, true);
+      broadcastSync("tick", time, true, sourceUrl);
     }
-  }, [isHost, broadcastSync, updatePresence]);
+  }, [isHost, broadcastSync, updatePresence, sourceUrl]);
 
   if (!userName || !code) return null;
 

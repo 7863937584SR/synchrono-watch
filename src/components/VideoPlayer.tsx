@@ -62,8 +62,8 @@ const VideoPlayer = ({
       return;
     }
 
-    if (syncState.type === "source") {
-      const nextSrc = syncState.sourceUrl || "";
+    const nextSrc = syncState.sourceUrl;
+    if (typeof nextSrc === "string" && nextSrc !== videoSrc) {
       setVideoSrc(nextSrc);
       setCurrentTime(0);
       setDuration(0);
@@ -73,6 +73,10 @@ const VideoPlayer = ({
         videoRef.current.pause();
         videoRef.current.load();
       }
+      if (syncState.type === "source") return;
+    }
+
+    if (syncState.type === "source") {
       return;
     }
 
@@ -112,7 +116,7 @@ const VideoPlayer = ({
       video.pause();
       setIsPlaying(false);
     }
-  }, [syncState, isHost]);
+  }, [syncState, isHost, videoSrc]);
 
   // ── Host controls ───────────────────────────────────────────────────────────
   const togglePlay = useCallback(() => {
@@ -222,6 +226,7 @@ const VideoPlayer = ({
     if (videoSrc.startsWith("blob:")) URL.revokeObjectURL(videoSrc);
     const url = URL.createObjectURL(file);
     setVideoSrc(url);
+    onSourceChange?.(null);
   };
 
   const clearSource = () => {
